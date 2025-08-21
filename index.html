@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stardust Canvas Enhanced</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;700&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: radial-gradient(ellipse at bottom, #1b2735 0%, #090a0f 100%);
+            overflow: hidden;
+            font-family: 'Montserrat', sans-serif;
+            cursor: crosshair;
+        }
+
+        #canvas1 {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        .text-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: rgba(255, 255, 255, 0.8);
+            text-align: center;
+            z-index: 2;
+            pointer-events: none; /* Make text non-interactive */
+            text-shadow: 0 0 15px rgba(173, 216, 230, 0.7);
+            animation: fadeIn 3s ease-out;
+            transition: opacity 0.5s;
+        }
+        
+        body.ui-interaction .text-container {
+             opacity: 0;
+        }
+
+        h1 {
+            font-size: 3.5rem;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+        }
+
+        p {
+            font-size: 1.2rem;
+            font-weight: 300;
+            margin-top: 0.5rem;
+        }
+        
+        .controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 3;
+            display: flex;
+            gap: 10px;
+            background-color: rgba(0, 0, 0, 0.3);
+            padding: 10px 15px;
+            border-radius: 25px;
+            backdrop-filter: blur(5px);
+            box-shadow: 0 0 15px rgba(0,0,0,0.5);
+        }
+
+        .controls button {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            padding: 8px 15px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 300;
+            transition: background-color 0.3s, transform 0.1s;
+        }
+
+        .controls button:hover {
+            background-color: rgba(255, 255, 255, 0.3);
+        }
+        
+        .controls button:active {
+            transform: scale(0.95);
+        }
+        
+        .controls button.active {
+            background-color: rgba(173, 216, 230, 0.5);
+            border-color: rgba(173, 216, 230, 0.8);
+        }
+
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas1"></canvas>
+    
+    <div class="text-container">
+        <h1>Stardust Canvas</h1>
+        <p>Weave your own galaxy. Click and drag to paint with light.</p>
+    </div>
+
+    <div class="controls">
+        <button id="modeBtn">Mode: Animate</button>
+        <button id="attractBtn">Gather: Off</button>
+        <button id="clearBtn">Clear</button>
+        <button id="saveBtn">Save</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas1');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        // --- Global State ---
+        let particlesArray = [];
+        let hue = 0;
+        let isDrawing = false;
+        let drawingMode = 'animate'; // 'animate' or 'paint'
+        let attractMode = false;
+        const gravity = 0.03;
+
+        const mouse = {
+            x: undefined,
+            y: undefined,
+            radius: 150 // Radius for attraction effect
+        };
+        
+        // --- UI Elements ---
+        const modeBtn = document.getElementById('modeBtn');
+        const attractBtn = document.getElementById('attractBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const saveBtn = document.getElementById('saveBtn');
+
+
+        // --- Event Listeners ---
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+
+        const startDrawing = (e) => {
+            isDrawing = true;
+            document.body.classList.add('ui-interaction'); // Hide text on interaction
+            updateMousePosition(e);
+            const particleCount = drawingMode === 'paint' ? 40 : 15;
+            for (let i = 0; i < particleCount; i++) {
+                particlesArray.push(new Particle());
+            }
+        };
+
+        const stopDrawing = () => {
+            isDrawing = false;
+        };
+
+        const draw = (e) => {
+            if (!isDrawing) return;
+            updateMousePosition(e);
+            const particleCount = drawingMode === 'paint' ? 10 : 5;
+            for (let i = 0; i < particleCount; i++) {
+                particlesArray.push(new Particle());
+            }
+        };
+
+        const updateMousePosition = (e) => {
+            if (e.touches) {
+                mouse.x = e.touches[0].clientX;
+                mouse.y = e.touches[0].clientY;
+            } else {
+                mouse.x = e.clientX;
+                mouse.y = e.clientY;
+            }
+        };
+
+        // Mouse events
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseout', stopDrawing);
+
+        // Touch events
+        canvas.addEventListener('touchstart', startDrawing);
+        canvas.addEventListener('touchend', stopDrawing);
+        canvas.addEventListener('touchmove', draw);
+
+        // Control button events
+        modeBtn.addEventListener('click', () => {
+            if (drawingMode === 'animate') {
+                drawingMode = 'paint';
+                modeBtn.textContent = 'Mode: Paint';
+                modeBtn.classList.add('active');
+            } else {
+                drawingMode = 'animate';
+                modeBtn.textContent = 'Mode: Animate';
+                modeBtn.classList.remove('active');
+            }
+        });
+
+        attractBtn.addEventListener('click', () => {
+            attractMode = !attractMode;
+            attractBtn.textContent = `Gather: ${attractMode ? 'On' : 'Off'}`;
+            attractBtn.classList.toggle('active');
+        });
+
+        clearBtn.addEventListener('click', () => {
+            particlesArray = [];
+        });
+
+        saveBtn.addEventListener('click', () => {
+            const link = document.createElement('a');
+            link.download = 'stardust-canvas.png';
+            // Draw background before saving
+            ctx.globalCompositeOperation = 'destination-over';
+            const gradient = ctx.createRadialGradient(canvas.width / 2, canvas.height, 0, canvas.width / 2, canvas.height, canvas.height);
+            gradient.addColorStop(0, '#1b2735');
+            gradient.addColorStop(1, '#090a0f');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+            ctx.globalCompositeOperation = 'source-over'; // Reset composition mode
+        });
+
+        // --- Particle Class ---
+        class Particle {
+            constructor() {
+                this.x = mouse.x;
+                this.y = mouse.y;
+                this.size = Math.random() * 6 + 1;
+                this.baseSize = this.size;
+                this.speedX = Math.random() * 4 - 2;
+                this.speedY = Math.random() * 4 - 2;
+                this.color = `hsl(${hue}, 100%, 50%)`;
+                this.life = 1;
+                this.lifeDecay = drawingMode === 'paint' ? (Math.random() * 0.002 + 0.001) : (Math.random() * 0.02 + 0.01);
+            }
+
+            update() {
+                // Attraction logic
+                if (attractMode && isDrawing) {
+                    const dx = mouse.x - this.x;
+                    const dy = mouse.y - this.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance < mouse.radius) {
+                        const forceDirectionX = dx / distance;
+                        const forceDirectionY = dy / distance;
+                        const force = (mouse.radius - distance) / mouse.radius;
+                        this.speedX += forceDirectionX * force * 0.5;
+                        this.speedY += forceDirectionY * force * 0.5;
+                    }
+                }
+                
+                // Gravity
+                this.speedY += gravity;
+
+                // Mode-based physics
+                if (drawingMode === 'paint') {
+                    // Slow down quickly
+                    this.speedX *= 0.92;
+                    this.speedY *= 0.92;
+                }
+
+                this.x += this.speedX;
+                this.y += this.speedY;
+                
+                if (drawingMode === 'animate') {
+                    this.life -= this.lifeDecay;
+                    if (this.size > 0.2) this.size -= 0.05;
+                }
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.globalAlpha = this.life;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1; // Reset alpha
+            }
+        }
+
+        // --- Animation Loop ---
+        function handleParticles() {
+            for (let i = particlesArray.length - 1; i >= 0; i--) {
+                const p = particlesArray[i];
+                p.update();
+                p.draw();
+                
+                // Remove particle if it's too small or faded
+                if (p.size <= 0.2 || p.life <= 0) {
+                    particlesArray.splice(i, 1);
+                }
+            }
+        }
+
+        function animate() {
+            // Use a semi-transparent fill to create a trail/fade effect
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            handleParticles();
+            hue = (hue + 1) % 360; // Cycle hue for rainbow colors
+            requestAnimationFrame(animate);
+        }
+        
+        animate();
+    </script>
+</body>
+</html>
